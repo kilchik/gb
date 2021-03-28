@@ -42,22 +42,43 @@ func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResul
 			return
 		}
 
-		page, err := parse(url)
-		if err != nil {
-			// ошибку отправляем в канал, а не обрабатываем на месте
+		var (
+			secondCtx, cancel = context.WithTimeout(ctx, time.Second*2)
+			parsingResult     = make(chan struct{})
+			title             string
+			links             map[string]struct{}
+		)
+
+		defer cancel()
+		go func(parsingResult chan struct{}) {
+			defer func() { parsingResult <- struct{}{} }()
+			page, err := parse(url)
+			if err != nil {
+				// ошибку отправляем в канал, а не обрабатываем на месте
+				results <- crawlResult{
+					err: errors.Wrapf(err, "parse page %s", url),
+				}
+				return
+			}
+
+			title = pageTitle(page)
+			links = pageLinks(nil, page)
+
+			// блокировка требуется, т.к. мы модифицируем мапку в несколько горутин
+			c.Lock()
+			c.visited[url] = title
+			c.Unlock()
+		}(parsingResult)
+
+		select {
+		case <-secondCtx.Done():
+			cancel()
 			results <- crawlResult{
-				err: errors.Wrapf(err, "parse page %s", url),
+				err: errors.New("timeout error " + url),
 			}
 			return
+		case <-parsingResult:
 		}
-
-		title := pageTitle(page)
-		links := pageLinks(nil, page)
-
-		// блокировка требуется, т.к. мы модифицируем мапку в несколько горутин
-		c.Lock()
-		c.visited[url] = title
-		c.Unlock()
 
 		// отправляем результат в канал, не обрабатывая на месте
 		results <- crawlResult{
@@ -71,8 +92,7 @@ func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResul
 			if c.checkVisited(link) {
 				continue
 			}
-
-			go c.run(ctx, link, results, depth)
+			go c.run(ctx, link, results, depth+1)
 		}
 	}
 }
