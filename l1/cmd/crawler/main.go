@@ -74,7 +74,7 @@ func watchSignals(cancel context.CancelFunc, crawler *crawler) {
 		syscall.SIGINT,
 		syscall.SIGTERM)
 
-	signal.Notify(osSignalUserChan, syscall.SIGINT)
+	signal.Notify(osSignalUserChan, syscall.SIGUSR1)
 	for {
 		select {
 		case sig := <-osSignalTerminatedChan:
