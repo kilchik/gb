@@ -14,9 +14,10 @@ type crawlResult struct {
 }
 
 type crawler struct {
-	sync.Mutex
-	visited  map[string]string
-	maxDepth int
+	mutexVisited  sync.Mutex
+	mutexMaxDepth sync.RWMutex
+	visited       map[string]string
+	maxDepth      int
 }
 
 func newCrawler(maxDepth int) *crawler {
@@ -24,6 +25,12 @@ func newCrawler(maxDepth int) *crawler {
 		visited:  make(map[string]string),
 		maxDepth: maxDepth,
 	}
+}
+
+func (c *crawler) increaseMaxDepth(maxDepth int) {
+	c.mutexMaxDepth.Lock()
+	c.maxDepth += maxDepth
+	c.mutexMaxDepth.Unlock()
 }
 
 // рекурсивно сканируем страницы
@@ -37,48 +44,29 @@ func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResul
 		return
 
 	default:
+		c.mutexMaxDepth.RLock()
 		// проверка глубины
 		if depth >= c.maxDepth {
 			return
 		}
+		c.mutexMaxDepth.RUnlock()
 
-		var (
-			secondCtx, cancel = context.WithTimeout(ctx, time.Second*2)
-			parsingResult     = make(chan struct{})
-			title             string
-			links             map[string]struct{}
-		)
-
-		defer cancel()
-		go func(parsingResult chan struct{}) {
-			defer func() { parsingResult <- struct{}{} }()
-			page, err := parse(url)
-			if err != nil {
-				// ошибку отправляем в канал, а не обрабатываем на месте
-				results <- crawlResult{
-					err: errors.Wrapf(err, "parse page %s", url),
-				}
-				return
-			}
-
-			title = pageTitle(page)
-			links = pageLinks(nil, page)
-
-			// блокировка требуется, т.к. мы модифицируем мапку в несколько горутин
-			c.Lock()
-			c.visited[url] = title
-			c.Unlock()
-		}(parsingResult)
-
-		select {
-		case <-secondCtx.Done():
-			cancel()
+		page, err := parse(url)
+		if err != nil {
+			// ошибку отправляем в канал, а не обрабатываем на месте
 			results <- crawlResult{
-				err: errors.New("timeout error " + url),
+				err: errors.Wrapf(err, "parse page %s", url),
 			}
 			return
-		case <-parsingResult:
 		}
+
+		title := pageTitle(page)
+		links := pageLinks(nil, page)
+
+		// блокировка требуется, т.к. мы модифицируем мапку в несколько горутин
+		c.mutexVisited.Lock()
+		c.visited[url] = title
+		c.mutexVisited.Unlock()
 
 		// отправляем результат в канал, не обрабатывая на месте
 		results <- crawlResult{
@@ -92,14 +80,15 @@ func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResul
 			if c.checkVisited(link) {
 				continue
 			}
-			go c.run(ctx, link, results, depth+1)
+
+			go c.run(ctx, link, results, depth)
 		}
 	}
 }
 
 func (c *crawler) checkVisited(url string) bool {
-	c.Lock()
-	defer c.Unlock()
+	c.mutexVisited.Lock()
+	defer c.mutexVisited.Unlock()
 
 	_, ok := c.visited[url]
 	return ok

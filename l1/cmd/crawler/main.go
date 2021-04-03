@@ -43,8 +43,7 @@ func init() {
 
 func main() {
 	started := time.Now()
-
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	crawler := newCrawler(depthLimit)
 	go watchSignals(cancel, crawler)
 	defer cancel()
@@ -83,7 +82,7 @@ func watchSignals(cancel context.CancelFunc, crawler *crawler) {
 			cancel()
 			return
 		case <-osSignalUserChan:
-			crawler.maxDepth += 10
+			crawler.increaseMaxDepth(10)
 			log.Printf("got signal %d", crawler.maxDepth)
 		}
 	}
