@@ -72,7 +72,7 @@ func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResul
 				continue
 			}
 
-			go c.run(ctx, link, results, depth)
+			go c.run(ctx, link, results, depth+1)
 		}
 	}
 }
