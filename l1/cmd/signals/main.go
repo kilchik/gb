@@ -10,10 +10,10 @@ import (
 func main() {
 	log.Print("start")
 
-	sigintChan := make(chan os.Signal)
+	sigintChan := make(chan os.Signal, 1)
 	signal.Notify(sigintChan, syscall.SIGINT)
 
-	sigtermChan := make(chan os.Signal)
+	sigtermChan := make(chan os.Signal, 1)
 	signal.Notify(sigtermChan, syscall.SIGTERM)
 
 	select {

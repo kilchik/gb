@@ -68,7 +68,7 @@ func main() {
 
 // ловим сигналы выключения
 func watchSignals(cancel context.CancelFunc) {
-	osSignalChan := make(chan os.Signal)
+	osSignalChan := make(chan os.Signal, 1)
 
 	signal.Notify(osSignalChan,
 		syscall.SIGINT,
