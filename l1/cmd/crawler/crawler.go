@@ -26,6 +26,12 @@ func newCrawler(maxDepth int) *crawler {
 	}
 }
 
+func (c *crawler) dive() {
+	c.Lock()
+	c.maxDepth += 2
+	c.Unlock()
+}
+
 // рекурсивно сканируем страницы
 func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResult, depth int) {
 	// просто для того, чтобы успевать следить за выводом программы, можно убрать :)

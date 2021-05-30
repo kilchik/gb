@@ -1,18 +1,30 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"golang.org/x/net/html"
+	"log"
 	"net/http"
+	"time"
 )
 
 // парсим страницу
 func parse(url string) (*html.Node, error) {
 	// что здесь должно быть вместо http.Get? :)
-	r, err := http.Get(url)
+	client := http.Client{Timeout: 1 * time.Second}
+	log.Println("init")
+	request, err := http.NewRequest("GET", url, bytes.NewReader([]byte{}))
+	if err != nil {
+		return nil, fmt.Errorf("can't send request")
+	}
+
+	r, err := client.Do(request)
+	log.Println("do")
 	if err != nil {
 		return nil, fmt.Errorf("can't get page")
 	}
+
 	b, err := html.Parse(r.Body)
 	if err != nil {
 		return nil, fmt.Errorf("can't parse page")
