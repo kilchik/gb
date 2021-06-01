@@ -8,7 +8,7 @@ import (
 
 const addr = "localhost:5301"
 
-func main()  {
+func main() {
 	http.HandleFunc("/pay", func(writer http.ResponseWriter, request *http.Request) {
 		bb, err := ioutil.ReadAll(request.Body)
 		if err != nil {

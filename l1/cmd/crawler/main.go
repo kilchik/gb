@@ -56,6 +56,9 @@ func main() {
 	// запускаем горутину для чтения из каналов
 	done := watchCrawler(ctx, results, errorsLimit, resultsLimit)
 
+	// запускаем горутину для прослушивания сигнала пользователя
+	go watchUserSignal(crawler)
+
 	// запуск основной логики
 	// внутри есть рекурсивные запуски анализа в других горутинах
 	crawler.run(ctx, url, results, 0)
@@ -68,7 +71,7 @@ func main() {
 
 // ловим сигналы выключения
 func watchSignals(cancel context.CancelFunc) {
-	osSignalChan := make(chan os.Signal)
+	osSignalChan := make(chan os.Signal, 1)
 
 	signal.Notify(osSignalChan,
 		syscall.SIGINT,
@@ -79,6 +82,16 @@ func watchSignals(cancel context.CancelFunc) {
 
 	// если сигнал получен, отменяем контекст работы
 	cancel()
+}
+
+// ловим сигнал пользователя
+func watchUserSignal(c *crawler) {
+	osUserChan := make(chan os.Signal, 1)
+
+	signal.Notify(osUserChan, syscall.SIGUSR1)
+	<- osUserChan
+	log.Printf("got user signal to search deep")
+	c.dive()
 }
 
 func watchCrawler(ctx context.Context, results <-chan crawlResult, maxErrors, maxResults int) chan struct{} {

@@ -15,6 +15,7 @@ type crawlResult struct {
 
 type crawler struct {
 	sync.Mutex
+	rwMutex sync.RWMutex
 	visited  map[string]string
 	maxDepth int
 }
@@ -26,10 +27,19 @@ func newCrawler(maxDepth int) *crawler {
 	}
 }
 
+func (c *crawler) dive() {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+	c.maxDepth += 2
+}
+
 // рекурсивно сканируем страницы
 func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResult, depth int) {
 	// просто для того, чтобы успевать следить за выводом программы, можно убрать :)
 	time.Sleep(2 * time.Second)
+
+	ctxParse, cancel := context.WithTimeout(ctx, 3 * time.Second)
+	defer cancel()
 
 	// проверяем что контекст исполнения актуален
 	select {
@@ -42,7 +52,7 @@ func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResul
 			return
 		}
 
-		page, err := parse(url)
+		page, err := parse(ctxParse, url)
 		if err != nil {
 			// ошибку отправляем в канал, а не обрабатываем на месте
 			results <- crawlResult{
@@ -51,8 +61,8 @@ func (c *crawler) run(ctx context.Context, url string, results chan<- crawlResul
 			return
 		}
 
-		title := pageTitle(page)
-		links := pageLinks(nil, page)
+		title := pageTitle(ctxParse, page)
+		links := pageLinks(ctxParse, nil, page)
 
 		// блокировка требуется, т.к. мы модифицируем мапку в несколько горутин
 		c.Lock()
